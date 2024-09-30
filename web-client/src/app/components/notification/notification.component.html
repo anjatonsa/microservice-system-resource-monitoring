@@ -1,0 +1,17 @@
+<div class="notifications">
+<div class="header"> <h2>Notifications</h2> </div>
+
+<div class="timeline-container">
+    <div class="timeline-item" *ngFor="let notification of notifications">
+      <div class="timeline-time">
+        {{ notification.timeReceived | date: 'short' }}
+      </div>
+      <div class="timeline-content">
+        <div   class ="timeline-message" [ngStyle]="{'background-color': colorCondition ? '#7CBF65' : '#EAAA00'}" *ngFor="let message of notification.messages">
+          {{ message }}
+        </div>
+      </div>
+    </div>
+  </div>
+  
+</div>

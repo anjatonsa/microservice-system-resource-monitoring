@@ -1,0 +1,6 @@
+Flask==3.0.2
+paho-mqtt
+numpy
+influxdb_client
+python-dotenv
+requests

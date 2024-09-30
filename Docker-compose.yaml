@@ -1,0 +1,179 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto
+    hostname: mosquitto
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    networks:
+      - msSystem
+    depends_on:
+      mlmodel:
+         condition: service_started
+  
+  sensor:
+    build: 
+      context: ./SensorMS
+      dockerfile: Dockerfile
+    container_name: sensor_ms 
+    networks:
+      - msSystem 
+    depends_on:
+      mlmodel:
+         condition: service_started
+      mosquitto:
+          condition: service_started
+  
+  influxdb:
+    image: influxdb
+    container_name: influx_db
+    ports:
+      - "8086:8086"
+    volumes:
+      - ./influxdb_data:/var/lib/influxdb2
+    networks:
+      - msSystem
+
+  dashboard:
+    build: 
+      context: ./DashboardMS
+      dockerfile: Dockerfile
+    container_name: dashboard_ms
+    ports:
+      - "5002:5002"
+    depends_on:
+      sensor:
+         condition: service_started
+      influxdb:
+         condition: service_started
+    networks:
+      - msSystem
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana_c
+    ports:
+      - "3000:3000"
+    environment:
+    - GF_SECURITY_ALLOW_EMBEDDING=true
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      dashboard:
+         condition: service_started
+      influxdb:
+         condition: service_started
+    networks:
+      - msSystem
+
+  analytics:
+    build: 
+      context: ./AnalyticsMS
+      dockerfile: Dockerfile
+    container_name: analytics_ms 
+    environment:
+      - MLMODEL_URL=${MLMODEL_URL}
+    networks:
+      - msSystem 
+    depends_on:
+      mlmodel:
+         condition: service_started
+      mosquitto:
+          condition: service_started
+      
+        
+
+  command:
+    build: 
+      context: ./CommandMS
+      dockerfile: Dockerfile
+    container_name: command_ms 
+    ports:
+      - "5001:5001"
+    environment:
+      APIGATEWAY_URL: ${APIGATEWAY_URL}
+    networks:
+      - msSystem 
+    depends_on:
+      mlmodel:
+         condition: service_started
+      mosquitto:
+          condition: service_started
+
+  apigateway:
+    build: 
+      context: ./APIGateway
+      dockerfile: Dockerfile
+    container_name: apigateway_ms 
+    ports:
+      - "5003:5003"
+    environment:
+      - AUTH_MS_URL=${AUTH_MS_URL}
+      - DASHBOARD_MS_URL=${DASHBOARD_MS_URL}
+      - COMMAND_MS_URL=${COMMAND_MS_URL}
+    networks:
+      - msSystem 
+    depends_on:
+      mlmodel:
+         condition: service_started
+      mosquitto:
+          condition: service_started
+      command:
+          condition: service_started
+      dashboard:
+          condition: service_started
+
+  auth:
+    build: 
+      context: ./AuthMS
+      dockerfile: Dockerfile
+    container_name: auth_ms
+    ports:
+      - "5004:5004"
+    environment:
+      MYSQL_HOST: mysql-db
+      MYSQL_USER: ${MYSQL_USER}         
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD} 
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      mlmodel:
+         condition: service_started
+      mosquitto:
+          condition: service_started
+      mysql-db:
+          condition: service_started
+    networks:
+      - msSystem
+
+  mysql-db:
+    image: mysql:8.0
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}  
+      MYSQL_DATABASE: ${MYSQL_DATABASE}            
+      MYSQL_USER: ${MYSQL_USER}                    
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}            
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - msSystem
+  
+  mlmodel:
+    build: ./MLModelMS
+    container_name: mlmodel_ms
+    networks:
+      - msSystem
+
+volumes:
+  mysql-data: 
+  grafana-data:
+  
+networks:
+  msSystem:
+    driver: bridge
